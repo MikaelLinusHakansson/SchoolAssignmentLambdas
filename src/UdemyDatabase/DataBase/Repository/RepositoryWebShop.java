@@ -1,5 +1,6 @@
 package UdemyDatabase.DataBase.Repository;
 
+import UdemyDatabase.DataBase.MainWebShop.MainWebShop;
 import UdemyDatabase.DataBase.MainWebShop.utilityClass;
 import UdemyDatabase.DataBase.Repository.Enums.*;
 
@@ -23,7 +24,8 @@ public class RepositoryWebShop {
 
     public boolean login() {
         while (true) {
-            /*2015987738 222*/
+            // en loop som ber personen att logga in
+            /* TODO LOGIN 2015987738 222*/  // användarnamn och lösenord för kund #2 Nicole Kidman
             System.out.println("Enter SSA as username & your password:\n'quit' to quit");
             String userName = utility.scannerString();
             if ("quit".equalsIgnoreCase(userName)) {
@@ -46,10 +48,12 @@ public class RepositoryWebShop {
     }
 
     private List<CustomersNot> extractCustomerId(List<CustomersNot> listOfCustomers, String SSA) {
+        // Hämtar kundens id och lösenord för inloggning.
         return listOfCustomers.stream().filter(customersNot -> customersNot.getSSA().equals(SSA)).toList();
     }
 
     private boolean checkUserNameAndPassword(String userName, String password) {
+        // Kollar så det är rätt lösenord för rätt användarnamn
         return queryCustomers().
                 stream().
                 map(customersNot -> customersNot.getSSA() + customersNot.getPassword()).
@@ -58,6 +62,7 @@ public class RepositoryWebShop {
 
 
     public void printShoeView() {
+        // printar ut alla skor vi har med lager ett lager saldo > 0
         shoeView().stream().filter(shoeView -> shoeView.getStock() > 0).forEach(shoeView -> System.out.println(
                 shoeView.getNumberChoice() + " " + "Name: " + shoeView.getNameOfShoe()
                         + " Brand: " + shoeView.getNameOfBrand()
@@ -66,35 +71,75 @@ public class RepositoryWebShop {
                         + " Price: " + shoeView.getPrice() + " kr"));
     }
 
+    // Metod för att lägga till i en order eller göra en ny
     public void makeOrder() {
         printShoeView();
         System.out.println("Pick a shoe to add to cart");
-        int pickProduct = utility.scannerInt();
-        List<Shoes> listOfShoes = insertExtractedShoe(pickProduct).stream().toList();
+        try {
+            int pickProduct = utility.scannerInt();
+            List<Shoes> listOfShoes = insertExtractedShoe(pickProduct).stream().toList();
 
-        System.out.println("New order? y/n");
-        String yesOrNo = utility.scannerString();
+            System.out.println("New order? y/n");
+            String yesOrNo = utility.scannerString();  // else if macka för felhantering
+            if (yesOrNo.equalsIgnoreCase("n")) {
+                System.out.println("Order id: ");
+                try {
+                    int orderId = utility.scannerInt();
+                    if (checkMatchingOrderItemShoe(pickProduct, orderId)) {
+                        addToCart(orderId, listOfShoes);
+                    } else if (checkIfShoeExists(pickProduct)) {
+                        System.out.println("Could not find ID but found SHOE. Making new order");
+                        addToCart(-1, listOfShoes);
+                    } else {
+                        System.out.println("Invalid shoe or Id match.");
+                    }
+                } catch (InputMismatchException e) {
+                    System.out.println("Invalid input for order");
+                }
+            } else if (yesOrNo.equalsIgnoreCase("y")) {
+                addToCart(-1, listOfShoes);
+            } else {
+                System.out.println("Invalid input");
+            }
 
-        int currentOrder = currentOrder(yesOrNo);
-        addToCart(currentOrder, listOfShoes);
+        } catch (InputMismatchException e) {
+            System.out.println("Invalid input for shoe");
+            // Om du skriver fel när du väljer produkt T.ex. Skriver in en string istället för en siffra
+        }
     }
 
     private List<Shoes> insertExtractedShoe(int pickProduct) {
+        // Returnerar en matchade produkt
         return queryShoes().
                 stream().
                 filter(shoes -> shoes.getName().equals(extractNameOfShoe(pickProduct).get(0))).
                 toList();
     }
 
-    private int currentOrder(String order) {
-        if (order.equals("n")) {
-            System.out.println("orderId: ");
-            return utility.scannerInt();
+    public boolean checkMatchingOrderItemShoe(int theProductNumber, int orderId) {
+        // Hjälp för felhantering. Kontrollerar ihop sammanhängande produkt och order
+
+        List<OrderItem> listOfOrderItems = queryOrderItem().stream().toList();
+        for (OrderItem listOfOrderItem : listOfOrderItems) {
+            if (listOfOrderItem.getShoesId() == theProductNumber && listOfOrderItem.getOrderId() == orderId) {
+                return true;
+            }
         }
-        return -1;
+        return false;
+    }
+
+    public boolean checkIfShoeExists(int product) {
+        // Returnerar true om produkten matchar med input från användare
+        for (ShoeView shoeView : shoeView()) {
+            if (shoeView.getNumberChoice() == product) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<String> extractNameOfShoe(int pickProduct) {
+        // Returnerar en ett namn för en sko som matchar
         return shoeView().
                 stream().
                 filter(shoeView -> shoeView.getNumberChoice() == pickProduct).
@@ -102,7 +147,9 @@ public class RepositoryWebShop {
                 toList();
     }
 
-    private void addToCart(int orderId, List<Shoes> theShoe) {
+    private void addToCart(int orderId, List<Shoes> theShoe) {  // todo ADD TO CART
+        // AddToCart procedure
+        List<OrderItem> OrderItem = queryOrderItem().stream().toList();
         try (Connection con = DriverManager.getConnection(
                 p.getProperty("connectionStringThree"),
                 p.getProperty("name"),
@@ -115,13 +162,17 @@ public class RepositoryWebShop {
             stmt.registerOutParameter(4, Types.VARCHAR);
             stmt.executeQuery();
             String databaseRecall = stmt.getString(4);
-            System.out.println(databaseRecall);
+            System.out.println(databaseRecall);  // skriver ut feedbacken från SQL- servern
         } catch (SQLException e) {
             e.getStackTrace();
         }
     }
 
     private List<ShoeView> shoeView() {
+        // Representerar en "view" i SQL fast i java.
+        // Vi hämtar bara den informationen vi vill komma åt och skriva ut från sql
+        // Finns ingen faktiskt view i sql som representerar detta.
+        // Vi hämtar allt från original källorna T.ex. Customers
         List<ShoeView> shoeView = new ArrayList<>();
         try (Connection con = DriverManager.getConnection(
                 p.getProperty("connectionStringThree"),
@@ -147,6 +198,10 @@ public class RepositoryWebShop {
             while (rs.next()) {
                 ShoeView tempShoeView = new ShoeView();
                 counter++;
+                // En counter för att ge varje sko en "ny" nyckel som inte har någonting att göra med den
+                // syntetisk nyckeln i sql för att hjälpa kunden till att peka ut en produkt
+                // utan att behöva skriva in ett namn (1......*).
+                // detta kan ändras till vilken siffra som helst. Kan börja räkna från 100 om vi vill...
                 tempShoeView.setNameOfShoe(rs.getString(ShoesColumns.NAME.getValue()));
                 tempShoeView.setNameOfBrand(rs.getString(BrandColumns.NAME.getValue()));
                 tempShoeView.setNameOfColour(rs.getString(ColoursColumns.NAME.getValue()));
@@ -167,7 +222,8 @@ public class RepositoryWebShop {
         return shoeView;
     }
 
-    private List<Shoes> queryShoes() {
+    private List<Shoes> queryShoes() { // TODO
+        // Hämtar alla skor från table Shoes
         List<Shoes> listOfShoes = new ArrayList<>();
         List<Brand> listOfbrands = queryBrand().stream().toList();
         List<Sizes> listOfSizes = querySize().stream().toList();
@@ -224,6 +280,7 @@ public class RepositoryWebShop {
 
 
     private List<Brand> queryBrand() {
+        // Hämtar Table Brand
         List<Brand> listOfBrands = new ArrayList<>();
         try (Connection con = DriverManager.getConnection(
                 p.getProperty("connectionStringThree"),
@@ -269,6 +326,7 @@ public class RepositoryWebShop {
     }
 
     public void printCustomers() {
+        // printar ut alla Customers med namn och adress. Mer info kan läggas till om man vill
         List<CustomersNot> listOfCustomers = queryCustomers();
         listOfCustomers.forEach(customersNot ->
                 System.out.println(
@@ -277,6 +335,7 @@ public class RepositoryWebShop {
     }
 
     private List<CustomersNot> queryCustomers() {
+        // Hämtar Customers table
         List<CustomersNot> listOfCustomers = new ArrayList<>();
         try (Connection con = DriverManager.getConnection(
                 p.getProperty("connectionStringThree"),
@@ -305,6 +364,7 @@ public class RepositoryWebShop {
     }
 
     private List<Colours> queryColours() {
+        // Hämtar Colours table
         List<Colours> listOfColours = new ArrayList<>();
         try (Connection con = DriverManager.getConnection(
                 p.getProperty("connectionStringThree"),
@@ -329,6 +389,7 @@ public class RepositoryWebShop {
 
 
     public List<Orders> queryOrders() {
+        // Hämtar Colours Orders
         List<Orders> listOfOrders = new ArrayList<>();
         List<CustomersNot> listOfCustomers = queryCustomers().stream().toList();
         try (Connection con = DriverManager.getConnection(
@@ -359,15 +420,16 @@ public class RepositoryWebShop {
     }
 
     public void printNumberOfOrdersPerCustomer() {
-
+        // Sparar två listor med Ordrar och Kunder.
         List<Orders> listOfOrders = queryOrders().stream().toList();
         List<CustomersNot> listOfCustomers = queryCustomers().stream().toList();
 
         List<Integer> listOfCustomerId = new ArrayList<>();
         List<Integer> sumOfOrders = new ArrayList<>();
 
-        listOfOrders.stream().map(UdemyDatabase.DataBase.Repository.Orders::getCustomerId).forEach(listOfCustomerId::add);
-
+        listOfOrders.stream().map(Orders::getCustomerId).forEach(listOfCustomerId::add);
+        // Iterar igenom en lista med hjälp av stream lägger till antal ordrar varje person har lagt.
+        // Vi gjorde detta innan vi byggde om programmet and why change something that works right?
         listOfCustomers.stream().map(CustomersNot::getId).forEach(integer -> {
             int counter = 0;
             for (Integer value : listOfCustomerId) {
@@ -384,6 +446,7 @@ public class RepositoryWebShop {
     }
 
     public List<OrderItem> queryOrderItem() {
+        // Hämtar OrderItem table
         List<OrderItem> listOfOrderItems = new ArrayList<>();
         List<Orders> listOfOrders = queryOrders().stream().toList();
         List<Shoes> listOfShoes = queryShoes().stream().toList();
@@ -401,7 +464,7 @@ public class RepositoryWebShop {
 
                 tempOrderItem.setOrderId(rs.getInt(OrderItemColumns.ORDERID.getValue()));
                 tempOrderItem.setShoesId(rs.getInt(OrderItemColumns.SHOESID.getValue()));
-
+                // lägger in ett matchade shoe objekt och matchade Order objekt i OrderItem
                 listOfShoes.forEach(shoes -> {
                     if (tempOrderItem.getShoesId() == shoes.getSizeId()) {
                         tempOrderItem.setShoes(shoes);
@@ -514,7 +577,8 @@ public class RepositoryWebShop {
             if (orderItem.getShoes().getName() == null
                     || orderItem.getShoes().getBrand() == null
                     || orderItem.getShoes().getColour() == null
-                    || orderItem.getShoes().getSize() == null) {
+                    || orderItem.getShoes().getSize() == null
+                    || orderItem.getOrder().getCustomer().getAdress() == null) {
             } else if (ssi.search(orderItem.getShoes(), wordToSearch)) {
                 System.out.println(orderItem.getOrder().getCustomer().getName() +
                         " adress: " + orderItem.getOrder().getCustomer().getAdress() +
@@ -529,26 +593,31 @@ public class RepositoryWebShop {
     }
 
     public void printFilter() {
+        // 2015987738
         while (true) {
             System.out.println("1 for brand\n2 for Colour\n3 for size");
             final String attributeToSearchFor = utility.scannerString();
 
-            if (attributeToSearchFor.equalsIgnoreCase("1")) {
-                System.out.println("What brand?");
-            } else if (attributeToSearchFor.equalsIgnoreCase("2")) {
-                System.out.println("What colour?");
-            } else if (attributeToSearchFor.equalsIgnoreCase("3")) {
-                System.out.println("What size?");
+            switch (attributeToSearchFor) {
+                case "1" -> System.out.println("What brand?");
+                case "2" -> System.out.println("What colour?");
+                case "3" -> System.out.println("What size?");
+                default -> {
+                    System.out.println("Invalid input");
+                    continue;
+                }
             }
+// TODO Pink nike 43
 
             final String attributeToSearchFor2 = utility.scannerString();
-
-            if (attributeToSearchFor.equalsIgnoreCase("1")) {
-                wordsToSeachFor(brandSearch, attributeToSearchFor2);
-            } else if (attributeToSearchFor.equalsIgnoreCase("2")) {
-                wordsToSeachFor(colourSearch, attributeToSearchFor2);
-            } else if (attributeToSearchFor.equalsIgnoreCase("3")) {
-                wordsToSeachFor(sizeSearch, attributeToSearchFor2);
+            switch (attributeToSearchFor) {
+                case "1" -> wordsToSeachFor(brandSearch, attributeToSearchFor2);
+                case "2" -> wordsToSeachFor(colourSearch, attributeToSearchFor2);
+                case "3" -> wordsToSeachFor(sizeSearch, attributeToSearchFor2);
+                default -> {
+                    System.out.println("Invalid input");
+                    continue;
+                }
             }
             return;
         }
